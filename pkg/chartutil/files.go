@@ -16,9 +16,11 @@ limitations under the License.
 package chartutil
 
 import (
+	"bytes"
 	"encoding/base64"
 	"path"
 	"strings"
+	"text/template"
 
 	yaml "gopkg.in/yaml.v2"
 
@@ -160,6 +162,43 @@ func (f Files) Lines(path string) []string {
 	}
 
 	return strings.Split(string(f[path]), "\n")
+}
+
+// Template returns the complete file set after having been compiled to
+// templates. This should help users to be able to properly separate out their
+// files which may need some templating without forcing them to be included as
+// YAML files.
+//
+// This is designed to be called from a template, and recommended practice is
+// to pass the root templating data object.
+func (f Files) Template(data interface{}) Files {
+	nf := Files{}
+
+	buf := &bytes.Buffer{}
+	for k := range f {
+		tpl, err := template.New("files").Parse(f.Get(k))
+		if err != nil {
+			// Panic is handled internally by the template engine and returned as an
+			// error from .Execute
+			panic(err)
+		}
+
+		buf.Reset()
+
+		err = tpl.Execute(buf, data)
+		if err != nil {
+			// See note on above panic
+			panic(err)
+		}
+
+		// buf.Bytes() is not safe to be used directly; the slice will be reused
+		// upon Reset() and subequent writes
+		bs := make([]byte, buf.Len())
+		copy(bs, buf.Bytes())
+		nf[k] = bs
+	}
+
+	return nf
 }
 
 // ToYaml takes an interface, marshals it to yaml, and returns a string. It will

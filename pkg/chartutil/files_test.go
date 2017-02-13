@@ -22,15 +22,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var cases = []struct {
-	path, data string
-}{
-	{"ship/captain.txt", "The Captain"},
-	{"ship/stowaway.txt", "Legatt"},
-	{"story/name.txt", "The Secret Sharer"},
-	{"story/author.txt", "Joseph Conrad"},
-	{"multiline/test.txt", "bar\nfoo"},
-}
+var (
+	cases = []struct {
+		path, data string
+	}{
+		{"ship/captain.txt", "The Captain"},
+		{"ship/stowaway.txt", "Legatt"},
+		{"story/name.txt", "The Secret Sharer"},
+		{"story/author.txt", "Joseph Conrad"},
+		{"multiline/test.txt", "bar\nfoo"},
+	}
+
+	tpls = map[string]string{
+		"foo/bar.tpl": "{{ .Foo }}",
+	}
+)
 
 func getTestFiles() []*any.Any {
 	a := []*any.Any{}
@@ -38,6 +44,14 @@ func getTestFiles() []*any.Any {
 		a = append(a, &any.Any{TypeUrl: c.path, Value: []byte(c.data)})
 	}
 	return a
+}
+
+func testTemplateFiles(m map[string]string) Files {
+	f := Files{}
+	for k := range m {
+		f[k] = []byte(m[k])
+	}
+	return f
 }
 
 func TestNewFiles(t *testing.T) {
@@ -96,6 +110,19 @@ func TestLines(t *testing.T) {
 	as.Len(out, 2)
 
 	as.Equal("bar", out[0])
+}
+
+func TestTemplateError(t *testing.T) {
+	as := assert.New(t)
+
+	f := testTemplateFiles(tpls)
+
+	as.Panics(func() {
+		f.Template(struct{ foo string }{"testing"})
+	})
+
+	f = f.Template(struct{ Foo string }{"testing"})
+	as.Equal("testing", f.Get("foo/bar.tpl"))
 }
 
 func TestToYaml(t *testing.T) {
